@@ -104,3 +104,61 @@ int gedit_lspjump_goto_file_line_column(GeditWindow *window, GFile *gfile, long 
 		}
 	}
 }
+
+int gedit_lspjump_goto_file_line_column_and_track(GeditWindow *window, GFile *gfile, long line, long character, GQueue *stack)
+{
+	GeditDocument *document = gedit_window_get_active_document(window);
+
+	GFile *prev_file=lspjump_get_active_file_from_window(window);
+	
+	GeditTab *tab = gedit_window_get_active_tab(window);
+	if (!tab)
+	{
+		g_print("No active tab.\n");
+		return -1;
+	}
+
+	GeditDocument *doc = gedit_tab_get_document(tab);
+	
+	GtkTextBuffer *buffer = GTK_TEXT_BUFFER(doc);
+
+	// Get the current cursor position
+	GtkTextIter iter;
+	gtk_text_buffer_get_iter_at_mark(buffer, &iter, gtk_text_buffer_get_insert(buffer));
+	
+	
+	TrackPos *new_pos=calloc(1,sizeof(TrackPos));
+	new_pos->file=g_file_dup(prev_file);
+	new_pos->line=gtk_text_iter_get_line(&iter);
+	new_pos->character=gtk_text_iter_get_line_offset(&iter);
+
+	g_queue_push_tail(stack,new_pos);
+
+	gedit_lspjump_goto_file_line_column(window,gfile,line,character);
+}
+
+int gedit_lspjump_do_undo(GeditWindow *window)
+{
+	TrackPos *pos=g_queue_pop_tail(GLOBAL_BACK_STACK);
+	
+	if(pos)
+	{
+		gedit_lspjump_goto_file_line_column(window,pos->file,pos->line,pos->character);
+		
+		g_object_unref(pos->file);
+		free(pos);
+	}
+}
+
+int gedit_lspjump_do_redo(GeditWindow *window)
+{
+//	TrackPos *pos=g_queue_pop_tail(GLOBAL_BACK_STACK);
+//	
+//	if(pos)
+//	{
+//		gedit_lspjump_goto_file_line_column(window,pos->file,pos->line,pos->character);
+//		
+//		g_object_unref(pos->file);
+//		free(pos);
+//	}
+}

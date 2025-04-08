@@ -26,8 +26,21 @@ freely, subject to the following restrictions:
 
 G_BEGIN_DECLS
 
+extern GQueue *GLOBAL_BACK_STACK;
+extern GQueue *GLOBAL_FORWARD_STACK;
+
+typedef struct TrackPos
+{
+	GFile *file;
+	long line;
+	long character;
+}TrackPos;
+
 GFile *lspjump_get_active_file_from_window(GeditWindow *window);
 char *get_full_text_from_active_document(GeditWindow *window);
 int gedit_lspjump_goto_file_line_column(GeditWindow *window, GFile *gfile, long line, long character);
+int gedit_lspjump_goto_file_line_column_and_track(GeditWindow *window, GFile *gfile, long line, long character, GQueue *stack);
+int gedit_lspjump_do_undo(GeditWindow *window);
+int gedit_lspjump_do_redo(GeditWindow *window);
 
 G_END_DECLS

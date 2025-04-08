@@ -189,6 +189,14 @@ static void _click_histoy_path(GtkComboBox *combo_box, gpointer user_data)
 	// Placeholder for path history click functionality
 }
 
+static void on_dialog_response(GtkDialog *dialog, gint response_id, gpointer user_data)
+{
+    if (response_id == GTK_RESPONSE_CLOSE)
+    {
+        gtk_widget_destroy(GTK_WIDGET(dialog));  // Close and destroy the dialog
+    }
+}
+
 GtkWidget *create_settings_window(GtkWidget *parent, GeditWindow *window)
 {
 	GtkWidget *grid = gtk_grid_new();
@@ -200,9 +208,17 @@ GtkWidget *create_settings_window(GtkWidget *parent, GeditWindow *window)
 		GTK_DIALOG_MODAL,
 		"Close", GTK_RESPONSE_CLOSE,
 		NULL);
-
+	
+	g_signal_connect(dialog, "response", G_CALLBACK(on_dialog_response), NULL);
+	
 	GtkWidget *content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
 	gtk_container_add(GTK_CONTAINER(content_area), grid);
+	gtk_widget_set_halign(grid, GTK_ALIGN_FILL);
+	gtk_widget_set_valign(grid, GTK_ALIGN_FILL);
+	gtk_grid_set_row_homogeneous(GTK_GRID(grid), TRUE);
+	gtk_grid_set_column_homogeneous(GTK_GRID(grid), TRUE);
+	gtk_widget_set_hexpand(grid, TRUE);
+	gtk_widget_set_vexpand(grid, TRUE);
 	
 	// Label and buttons setup
 	label = gtk_label_new("Project path:");

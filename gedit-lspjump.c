@@ -33,6 +33,9 @@ freely, subject to the following restrictions:
 #include "gedit-lspjump-common.h"
 #include "gedit-lspjump-rpc.h"
 
+GQueue *GLOBAL_BACK_STACK=NULL;
+GQueue *GLOBAL_FORWARD_STACK=NULL;
+
 static void gedit_app_activatable_iface_init(GeditAppActivatableInterface *iface);
 static void gedit_window_activatable_iface_init(GeditWindowActivatableInterface *iface);
 
@@ -84,11 +87,54 @@ static int get_language_definitions(GtkTextBuffer *buffer, const char **block_la
 	}
 }
 
+static void
+on_suggestion_clicked(GtkButton *button, gpointer user_data)
+{
+	g_print("Clicked: %s\n", gtk_button_get_label(button));
+}
+
 static gboolean on_key_press_event(GtkWidget *widget, GdkEventKey *event, gpointer user_data)
 {
-	if (event->keyval == GDK_KEY_Tab)
+	if (event->keyval == GDK_KEY_Tab && FALSE)
 	{
-		
+		GtkTextView *text_view=GTK_TEXT_VIEW(widget);
+	
+		GtkWidget *popover;
+		GtkWidget *box;
+		GtkWidget *btn1;
+		GtkWidget *btn2;
+
+		GtkTextBuffer *buffer = gtk_text_view_get_buffer(text_view);
+		GtkTextIter iter;
+		gtk_text_buffer_get_iter_at_mark(buffer, &iter, gtk_text_buffer_get_insert(buffer));
+
+		// Get cursor location (in window coordinates)
+		GdkRectangle location;
+		gtk_text_view_get_iter_location(text_view, &iter, &location);
+		gtk_text_view_buffer_to_window_coords(text_view, GTK_TEXT_WINDOW_WIDGET,
+			                                  location.x, location.y,
+			                                  &location.x, &location.y);
+
+		// Create popover attached to the text_view
+		popover = gtk_popover_new(GTK_WIDGET(text_view));
+		gtk_widget_set_halign(popover, GTK_ALIGN_START);
+		gtk_widget_set_valign(popover, GTK_ALIGN_START);
+		gtk_popover_set_pointing_to(GTK_POPOVER(popover), &location);
+
+		// Create content
+		box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+		gtk_container_add(GTK_CONTAINER(popover), box);
+
+		btn1 = gtk_button_new_with_label("Suggestion 1");
+		btn2 = gtk_button_new_with_label("Suggestion 2");
+
+		g_signal_connect(btn1, "clicked", G_CALLBACK(on_suggestion_clicked), NULL);
+		g_signal_connect(btn2, "clicked", G_CALLBACK(on_suggestion_clicked), NULL);
+
+		gtk_box_pack_start(GTK_BOX(box), btn1, FALSE, FALSE, 0);
+		gtk_box_pack_start(GTK_BOX(box), btn2, FALSE, FALSE, 0);
+
+		gtk_widget_show_all(popover);
 	}
 	return FALSE;
 }
@@ -123,7 +169,7 @@ static void lspjump_rpc_definition_cb(JsonRpcEndpoint *endpoint, json_t *root, v
 	
 	GeditWindow *const window=plugin->priv->window;
 	
-	gedit_lspjump_goto_file_line_column(window,gfile,line,character);
+	gedit_lspjump_goto_file_line_column_and_track(window,gfile,line,character,GLOBAL_BACK_STACK);
 }
 
 static void lspjump_definition_cb(GAction *action, GVariant *parameter, GeditLspJumpPlugin *plugin)
@@ -168,7 +214,7 @@ static void on_item_clicked(GtkButton *button, gpointer user_data)
 	const gchar *label = gtk_button_get_label(button);
 	g_print("Clicked on: %s\n", label);
 	
-	gedit_lspjump_goto_file_line_column(plugin->priv->window,gfile,line,character);
+	gedit_lspjump_goto_file_line_column_and_track(plugin->priv->window,gfile,line,character,GLOBAL_BACK_STACK);
 	// You would jump to the file/line here
 	gtk_widget_destroy(window);
 }
@@ -261,12 +307,12 @@ static void lspjump_reference_cb(GAction *action, GVariant *parameter, GeditLspJ
 
 static void lspjump_undo_cb(GAction *action, GVariant *parameter, GeditLspJumpPlugin *plugin)
 {
-//	create_settings_window(GTK_WIDGET(plugin->priv->app));
+	gedit_lspjump_do_undo(plugin->priv->window);
 }
 
 static void lspjump_redo_cb(GAction *action, GVariant *parameter, GeditLspJumpPlugin *plugin)
 {
-//	create_settings_window(GTK_WIDGET(plugin->priv->app));
+	gedit_lspjump_do_redo(plugin->priv->window);
 }
 
 static void lspjump_settings_cb(GAction *action, GVariant *parameter, GeditLspJumpPlugin *plugin)
@@ -461,6 +507,9 @@ static void gedit_lspjump_plugin_class_init(GeditLspJumpPluginClass *klass)
 	object_class->finalize = gedit_lspjump_plugin_finalize;
 	object_class->set_property = gedit_lspjump_plugin_set_property;
 	object_class->get_property = gedit_lspjump_plugin_get_property;
+	
+	GLOBAL_BACK_STACK=g_queue_new();
+	GLOBAL_FORWARD_STACK=g_queue_new();
 	
 	load_configuration();
 
