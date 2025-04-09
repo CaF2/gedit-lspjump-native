@@ -50,7 +50,7 @@ struct JsonRpcEndpoint
 	uint8_t initialized: 1;
 };
 
-int lspjump_rpc_init(const char *const root_uri);
+int lspjump_rpc_init(const char *const root_uri,const char *const lsp_bin,const char *const lsp_bin_args,const char *const lsp_settings);
 
 int lspjump_rpc_definition(const char *const file_path, const char *const file_contents, long doc_line, long doc_offset,
                            IdActionFunction action, void *user_data);

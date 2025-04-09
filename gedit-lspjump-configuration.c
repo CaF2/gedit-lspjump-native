@@ -18,133 +18,106 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 #include <glib.h>
-#include <libxml/parser.h>
-#include <libxml/tree.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <libgen.h>
+#include <dlfcn.h>
+#include <unistd.h>
 
 #include "gedit-lspjump-configuration.h"
 
-GPtrArray *GLOBAL_LSPJUMP = NULL;
+GPtrArray *GLOBAL_LSPJUMP_CONFIGURATIONS = NULL;
 
-static void parse_snippet_file(const char *filepath);
-static void process_snippet(xmlNode *node);
-static SnippetBlock *get_or_create_block(size_t str_len);
+static void parse_lspjump_file(const char *filepath);
+static void process_lspjump(xmlNode *node);
 
-static gint sort_snippet_block(gconstpointer a, gconstpointer b)
+void lspjump_configuration_file_free(LspJumpConfigurationFile *self)
 {
-	const SnippetBlock *entry1 = *((SnippetBlock **)a);
-	const SnippetBlock *entry2 = *((SnippetBlock **)b);
-
-	return entry2->str_len - entry1->str_len;
+	g_object_unref(self->file);
+	xmlFreeDoc(self->doc);
+	free(self);
 }
 
-int load_configuration()
+char *get_so_directory()
 {
-	GLOBAL_LSPJUMP = g_ptr_array_new_with_free_func((GDestroyNotify)g_free);
-
-	g_autofree char *home_config_dir = g_build_filename(g_get_home_dir(), ".config/gedit/lspjump/", NULL);
-
-	char *dirs[] = {home_config_dir, "/usr/share/gedit/plugins/lspjump/", "/usr/local/share/gedit/plugins/lspjump/"};
-
-	for (size_t i = 0; i < G_N_ELEMENTS(dirs); i++)
+	Dl_info info;
+	if (dladdr((void *)get_so_directory, &info) == 0)
 	{
-		GError *error = NULL;
-		GDir *dir = g_dir_open(dirs[i], 0, &error);
-		// printf("DIR: %s %p\n",dirs[i],dir);
-		if (!dir)
-		{
-			// printf("DIR error: %s\n",error->message);
-			continue;
-		}
-
-		const gchar *filename;
-		while ((filename = g_dir_read_name(dir)))
-		{
-			// printf("READ: %s\n",filename);
-			if (g_str_has_suffix(filename, ".xml"))
-			{
-				char *filepath = g_build_filename(dirs[i], filename, NULL);
-				parse_snippet_file(filepath);
-				g_free(filepath);
-			}
-		}
-		g_dir_close(dir);
+		return NULL;
 	}
 
-	g_ptr_array_sort(GLOBAL_LSPJUMP, sort_snippet_block);
+	char *path = realpath(info.dli_fname, NULL);
+	if (!path)
+	{
+		return NULL;
+	}
 
-	return 0;
+	char *dir = strdup(dirname(path));
+	free(path);
+	return dir;
 }
 
-static void parse_snippet_file(const char *filepath)
+static void parse_lspjump_file(const char *filepath)
 {
 	xmlDoc *doc = xmlReadFile(filepath, NULL, 0);
 	if (!doc)
 	{
 		return;
 	}
-
-	xmlNode *root = xmlDocGetRootElement(doc);
-	for (xmlNode *node = root->children; node; node = node->next)
-	{
-		if (node->type == XML_ELEMENT_NODE && g_strcmp0((const char *)node->name, "snippet") == 0)
-		{
-			process_snippet(node);
-		}
-	}
-
-	xmlFreeDoc(doc);
+	
+	LspJumpConfigurationFile *cfile=calloc(1,sizeof(LspJumpConfigurationFile));
+	cfile->file=g_file_new_for_path(filepath);
+	cfile->doc=doc;
+	
+	g_ptr_array_add(GLOBAL_LSPJUMP_CONFIGURATIONS,cfile);
 }
 
-static void process_snippet(xmlNode *node)
+int load_configuration()
 {
-	g_autofree char *tag = NULL;
-	g_autofree char *text = NULL;
+	GLOBAL_LSPJUMP_CONFIGURATIONS = g_ptr_array_new_with_free_func((GDestroyNotify)lspjump_configuration_file_free);
 
-	for (xmlNode *child = node->children; child; child = child->next)
+	g_autofree char *home_config_dir = g_build_filename(g_get_home_dir(), ".config/gedit/lspjump/", NULL);
+	
+	g_autofree char *so_dir = get_so_directory();
+	
+	char *dirs[] = {so_dir, home_config_dir, "/usr/share/gedit/plugins/lspjump/", "/usr/local/share/gedit/plugins/lspjump/"};
+
+	for (size_t i = 0; i < G_N_ELEMENTS(dirs); i++)
 	{
-		if (child->type == XML_ELEMENT_NODE)
+		GError *error = NULL;
+		GDir *dir = g_dir_open(dirs[i], 0, &error);
+		if (!dir)
 		{
-			if (g_strcmp0((const char *)child->name, "tag") == 0)
+			continue;
+		}
+
+		const gchar *filename;
+		while ((filename = g_dir_read_name(dir)))
+		{
+			if (g_str_has_suffix(filename, ".xml"))
 			{
-				tag = (char *)xmlNodeGetContent(child);
-			}
-			else if (g_strcmp0((const char *)child->name, "text") == 0)
-			{
-				text = (char *)xmlNodeGetContent(child);
+				printf("Read configuration file: %s\n",filename);
+			
+				char *filepath = g_build_filename(dirs[i], filename, NULL);
+				parse_lspjump_file(filepath);
+				g_free(filepath);
 			}
 		}
+		g_dir_close(dir);
 	}
 
-	if (tag && text)
-	{
-		size_t str_len = strlen(tag);
-		SnippetBlock *block = get_or_create_block(str_len);
-		SnippetTranslation *entry = g_malloc(sizeof(SnippetTranslation));
-		entry->from = g_steal_pointer(&tag);
-		entry->to = g_steal_pointer(&text);
-		// printf("FROM: %s %s\n",entry->from,entry->to);
-		g_ptr_array_add(block->nodes, entry);
-	}
+	return 0;
 }
 
-static SnippetBlock *get_or_create_block(size_t str_len)
+xmlNode *xml_get_child_by_tag(xmlNode *parent, const char *const tag)
 {
-	for (guint i = 0; i < GLOBAL_LSPJUMP->len; i++)
+	for (xmlNode *child = parent->children; child; child = child->next)
 	{
-		SnippetBlock *block = g_ptr_array_index(GLOBAL_LSPJUMP, i);
-		if (block->str_len == str_len)
+		if (child->type == XML_ELEMENT_NODE && xmlStrcmp(child->name, (const xmlChar *)tag) == 0)
 		{
-			return block;
+			return child; // caller must free
 		}
 	}
-
-	SnippetBlock *new_block = g_malloc(sizeof(SnippetBlock));
-	new_block->str_len = str_len;
-	new_block->nodes = g_ptr_array_new_with_free_func((GDestroyNotify)g_free);
-	g_ptr_array_add(GLOBAL_LSPJUMP, new_block);
-
-	return new_block;
+	return NULL;
 }

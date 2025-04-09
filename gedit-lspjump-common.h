@@ -36,10 +36,11 @@ typedef struct TrackPos
 	long character;
 }TrackPos;
 
+const char *get_programming_language(GeditWindow *window);
 GFile *lspjump_get_active_file_from_window(GeditWindow *window);
 char *get_full_text_from_active_document(GeditWindow *window);
 int gedit_lspjump_goto_file_line_column(GeditWindow *window, GFile *gfile, long line, long character);
-int gedit_lspjump_goto_file_line_column_and_track(GeditWindow *window, GFile *gfile, long line, long character, GQueue *stack);
+int gedit_lspjump_goto_file_line_column_and_track(GeditWindow *window, GFile *gfile, long line, long character);
 int gedit_lspjump_do_undo(GeditWindow *window);
 int gedit_lspjump_do_redo(GeditWindow *window);
 

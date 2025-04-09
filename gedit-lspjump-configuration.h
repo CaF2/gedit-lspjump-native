@@ -20,23 +20,21 @@ freely, subject to the following restrictions:
 #pragma once
 
 #include <glib.h>
+#include <libxml/parser.h>
+#include <libxml/tree.h>
+#include <gio/gio.h>
 
 G_BEGIN_DECLS
 
-typedef struct SnippetTranslation
+typedef struct LspJumpConfigurationFile
 {
-	char *from;
-	char *to;
-}SnippetTranslation;
-
-typedef struct SnippetBlock
-{
-	size_t str_len;
-	GPtrArray *nodes; ///< SnippetTranslation
-}SnippetBlock;
+	GFile *file;
+	xmlDoc *doc;
+}LspJumpConfigurationFile;
 
 int load_configuration();
+xmlNode *xml_get_child_by_tag(xmlNode *parent, const char *const tag);
 
-extern GPtrArray *GLOBAL_LSPJUMP;
+extern GPtrArray *GLOBAL_LSPJUMP_CONFIGURATIONS;
 
 G_END_DECLS

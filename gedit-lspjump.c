@@ -67,26 +67,6 @@ G_DEFINE_DYNAMIC_TYPE_EXTENDED(GeditLspJumpPlugin, gedit_lspjump_plugin, PEAS_TY
 
 //////////////////////////////////
 
-static int get_language_definitions(GtkTextBuffer *buffer, const char **block_language_start, 
-                                   const char **block_language_end, const char **line_language_start)
-{
-	GtkSourceBuffer *sbuffer = GTK_SOURCE_BUFFER(buffer);
-	GtkSourceLanguage *language = gtk_source_buffer_get_language(sbuffer);
-	if (buffer)
-	{
-		GtkTextIter iter;
-		GtkTextMark *mark = gtk_text_buffer_get_insert(buffer);
-		gtk_text_buffer_get_iter_at_mark(buffer, &iter, mark);
-		PangoLanguage *lang = gtk_text_iter_get_language(&iter);
-
-		(*block_language_start) = gtk_source_language_get_metadata(language, "block-language-start");
-		(*block_language_end) = gtk_source_language_get_metadata(language, "block-language-end");
-		(*line_language_start) = gtk_source_language_get_metadata(language, "line-language-start");
-
-		printf("LANG: %s [%s %s %s]\n", pango_language_to_string(lang), *block_language_start, *block_language_end, *line_language_start);
-	}
-}
-
 static void
 on_suggestion_clicked(GtkButton *button, gpointer user_data)
 {
@@ -169,7 +149,7 @@ static void lspjump_rpc_definition_cb(JsonRpcEndpoint *endpoint, json_t *root, v
 	
 	GeditWindow *const window=plugin->priv->window;
 	
-	gedit_lspjump_goto_file_line_column_and_track(window,gfile,line,character,GLOBAL_BACK_STACK);
+	gedit_lspjump_goto_file_line_column_and_track(window,gfile,line,character);
 }
 
 static void lspjump_definition_cb(GAction *action, GVariant *parameter, GeditLspJumpPlugin *plugin)
@@ -214,7 +194,7 @@ static void on_item_clicked(GtkButton *button, gpointer user_data)
 	const gchar *label = gtk_button_get_label(button);
 	g_print("Clicked on: %s\n", label);
 	
-	gedit_lspjump_goto_file_line_column_and_track(plugin->priv->window,gfile,line,character,GLOBAL_BACK_STACK);
+	gedit_lspjump_goto_file_line_column_and_track(plugin->priv->window,gfile,line,character);
 	// You would jump to the file/line here
 	gtk_widget_destroy(window);
 }
@@ -343,7 +323,7 @@ static void gedit_lspjump_plugin_app_activate(GeditAppActivatable *activatable)
 	gtk_application_set_accels_for_action(GTK_APPLICATION(priv->app), "win.definition", (const gchar *[]){"F3", NULL});
 	gtk_application_set_accels_for_action(GTK_APPLICATION(priv->app), "win.reference", (const gchar *[]){"F4", NULL});
 	gtk_application_set_accels_for_action(GTK_APPLICATION(priv->app), "win.lspjump_undo", (const gchar *[]){"<Alt>B", NULL});
-	gtk_application_set_accels_for_action(GTK_APPLICATION(priv->app), "win.lspjump_redo", (const gchar *[]){"<Shift>B", NULL});
+	gtk_application_set_accels_for_action(GTK_APPLICATION(priv->app), "win.lspjump_redo", (const gchar *[]){"<Alt><Shift>B", NULL});
 	gtk_application_set_accels_for_action(GTK_APPLICATION(priv->app), "win.lspjump_settings", (const gchar *[]){"F5", NULL});
 //	gtk_application_set_accels_for_action(GTK_APPLICATION(priv->app), "win.uncomment", (const gchar *[]){"<Primary><Shift>M", NULL});
 	

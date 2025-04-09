@@ -4,8 +4,6 @@ A rewrite of my own LspJump plugin but this time in C.
 
 Does not currently support everything from the python version, but we will get there eventually.
 
-Currently only uses clangd
-
 # Installation
 
 Just follow these steps:

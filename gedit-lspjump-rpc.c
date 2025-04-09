@@ -398,17 +398,29 @@ int lspjump_rpc_reference(const char *const file_path, const char *const file_co
 	return 1;
 }
 
-int lspjump_rpc_init(const char *const root_uri)
+int lspjump_rpc_init(const char *const root_uri,const char *const lsp_bin,const char *const lsp_bin_args,const char *const lsp_settings)
 {
 	GLOBAL_ENDPOINT=calloc(1,sizeof(JsonRpcEndpoint));
 	
-	gchar *args[] = {"/usr/bin/clangd", NULL};
+	g_auto(GStrv) bin_args = g_strsplit(lsp_bin_args, " ", -1);
+	
+	guint arg_len=bin_args?g_strv_length(bin_args):0;
+	
+	gchar *args[arg_len+2];
+	args[0]=lsp_bin?lsp_bin:"/usr/bin/clangd";
+	int i=0;
+	while(i<arg_len)
+	{
+		args[i+1]=bin_args[i];
+		i++;
+	}
+	args[i+1]=NULL;
 	spawn_child(GLOBAL_ENDPOINT, args[0], args);
 	
 //	const char *const root_uri="file:///home/flev/dev/c/test/lsp_c";
 	
 	json_error_t error;
-	json_t *capabilities = json_loads(LOGIN_STR, 0, &error);
+	json_t *capabilities = json_loads(lsp_settings?lsp_settings:LOGIN_STR, 0, &error);
 	
 	if (!capabilities)
 	{

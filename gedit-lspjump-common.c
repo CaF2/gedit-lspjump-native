@@ -19,6 +19,38 @@ freely, subject to the following restrictions:
 */
 #include "gedit-lspjump-common.h"
 
+const char *get_programming_language(GeditWindow *window)
+{
+	GeditTab *tab= gedit_window_get_active_tab(window);
+	
+	if(tab)
+	{
+		GeditDocument *doc = gedit_tab_get_document(tab);
+	
+		GtkTextBuffer *buffer = GTK_TEXT_BUFFER(doc);
+		GtkSourceBuffer *sbuffer = GTK_SOURCE_BUFFER(buffer);
+		GtkSourceLanguage *language = gtk_source_buffer_get_language(sbuffer);
+		if (language)
+		{
+//			GtkTextIter iter;
+//			GtkTextMark *mark = gtk_text_buffer_get_insert(buffer);
+//			gtk_text_buffer_get_iter_at_mark(buffer, &iter, mark);
+//			PangoLanguage *lang = gtk_text_iter_get_language(&iter);
+
+	//		(*block_language_start) = gtk_source_language_get_metadata(language, "block-language-start");
+	//		(*block_language_end) = gtk_source_language_get_metadata(language, "block-language-end");
+	//		(*line_language_start) = gtk_source_language_get_metadata(language, "line-language-start");
+	//
+	//		printf("LANG: %s [%s %s %s]\n", pango_language_to_string(lang), *block_language_start, *block_language_end, *line_language_start);
+			printf("LANG: %s\n", gtk_source_language_get_id(language));
+			
+			return gtk_source_language_get_id(language);
+		}
+	}
+	
+	return NULL;
+}
+
 GFile *lspjump_get_active_file_from_window(GeditWindow *window)
 {
 	GeditTab *active_tab = gedit_window_get_active_tab(window);
@@ -105,7 +137,14 @@ int gedit_lspjump_goto_file_line_column(GeditWindow *window, GFile *gfile, long 
 	}
 }
 
-int gedit_lspjump_goto_file_line_column_and_track(GeditWindow *window, GFile *gfile, long line, long character, GQueue *stack)
+void track_pos_free(gpointer data)
+{
+	TrackPos *const self=data;
+	g_object_unref(self->file);
+	free(self);
+}
+
+int gedit_lspjump_goto_file_line_column_and_track(GeditWindow *window, GFile *gfile, long line, long character)
 {
 	GeditDocument *document = gedit_window_get_active_document(window);
 
@@ -131,8 +170,16 @@ int gedit_lspjump_goto_file_line_column_and_track(GeditWindow *window, GFile *gf
 	new_pos->file=g_file_dup(prev_file);
 	new_pos->line=gtk_text_iter_get_line(&iter);
 	new_pos->character=gtk_text_iter_get_line_offset(&iter);
-
-	g_queue_push_tail(stack,new_pos);
+	
+	TrackPos *forward_pos=calloc(1,sizeof(TrackPos));
+	forward_pos->file=g_file_dup(gfile);
+	forward_pos->line=line;
+	forward_pos->character=character;
+	
+	g_queue_push_tail(GLOBAL_BACK_STACK,new_pos);
+	
+	g_queue_clear_full(GLOBAL_FORWARD_STACK,track_pos_free);
+	g_queue_push_tail(GLOBAL_FORWARD_STACK,forward_pos);
 
 	gedit_lspjump_goto_file_line_column(window,gfile,line,character);
 }
@@ -145,20 +192,26 @@ int gedit_lspjump_do_undo(GeditWindow *window)
 	{
 		gedit_lspjump_goto_file_line_column(window,pos->file,pos->line,pos->character);
 		
-		g_object_unref(pos->file);
-		free(pos);
+//		g_object_unref(pos->file);
+//		free(pos);
+		g_queue_push_tail(GLOBAL_FORWARD_STACK,pos);
 	}
+	
+	return 0;
 }
 
 int gedit_lspjump_do_redo(GeditWindow *window)
 {
-//	TrackPos *pos=g_queue_pop_tail(GLOBAL_BACK_STACK);
-//	
-//	if(pos)
-//	{
-//		gedit_lspjump_goto_file_line_column(window,pos->file,pos->line,pos->character);
-//		
+	TrackPos *pos=g_queue_pop_tail(GLOBAL_FORWARD_STACK);
+	
+	if(pos)
+	{
+		gedit_lspjump_goto_file_line_column(window,pos->file,pos->line,pos->character);
+		
 //		g_object_unref(pos->file);
 //		free(pos);
-//	}
+		g_queue_push_tail(GLOBAL_BACK_STACK,pos);
+	}
+	
+	return 0;
 }
