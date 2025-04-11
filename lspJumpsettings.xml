@@ -92,7 +92,7 @@
 	</lsp_settings>
 </language>
 <language name="Marksman">
-	<lsp_language>markup</lsp_language>
+	<lsp_language>markdown</lsp_language>
 	<lsp_bin>/usr/bin/marksman</lsp_bin>
 	<lsp_bin_args />
 	<lsp_search />

@@ -33,6 +33,8 @@ typedef struct RpcIdAction
 	int id;
 	IdActionFunction action;
 	void *user_data;
+	
+	uint8_t active;
 }RpcIdAction;
 
 #define GEDIT_RPC_ID_ACTIONS_LEN 64

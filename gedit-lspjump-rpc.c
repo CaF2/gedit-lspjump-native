@@ -49,11 +49,12 @@ int store_rpc_action(JsonRpcEndpoint *endpoint, IdActionFunction action, void *u
 {
 	for(int i=0;i<GEDIT_RPC_ID_ACTIONS_LEN;i++)
 	{
-		if(endpoint->id_actions[i].id==0)
+		if(endpoint->id_actions[i].active==0)
 		{
 			endpoint->id_actions[i].id=GLOBAL_RPC_ID;
 			endpoint->id_actions[i].action=action;
 			endpoint->id_actions[i].user_data=user_data;
+			endpoint->id_actions[i].active=1;
 			
 			return GLOBAL_RPC_ID;
 		}
@@ -158,13 +159,14 @@ static gboolean read_stdout(GIOChannel *source, GIOCondition condition, gpointer
 				{
 					for(int i=0;i<GEDIT_RPC_ID_ACTIONS_LEN;i++)
 					{
-						if(endpoint->id_actions[i].id==id_val)
+						if(endpoint->id_actions[i].active && endpoint->id_actions[i].id==id_val)
 						{
 							endpoint->id_actions[i].action(endpoint,json,endpoint->id_actions[i].user_data);
 						
 							endpoint->id_actions[i].id=0;
 							endpoint->id_actions[i].action=NULL;
 							endpoint->id_actions[i].user_data=NULL;
+							endpoint->id_actions[i].active=0;
 							
 							break;
 						}
