@@ -27,6 +27,7 @@ freely, subject to the following restrictions:
 #include <sys/wait.h>
 
 #include "gedit-lspjump-rpc.h"
+#include "gedit-lspjump-common.h"
 
 int GLOBAL_RPC_ID=1;
 
@@ -34,14 +35,13 @@ static JsonRpcEndpoint *GLOBAL_ENDPOINT=NULL;
 
 static void send_request(JsonRpcEndpoint *endpoint, const char *message)
 {
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 	gsize bytes_written;
 	g_io_channel_write_chars(endpoint->stdin_channel, message, -1, &bytes_written, &error);
 	g_io_channel_flush(endpoint->stdin_channel, &error);
 	if (error)
 	{
 		g_printerr("Error writing to child: %s\n", error->message);
-		g_error_free(error);
 	}
 }
 
@@ -73,22 +73,25 @@ int send_rpc_message(JsonRpcEndpoint *endpoint, const char *const method_name, j
 {
 	long use_id=-3;
 
-	json_t *root = json_pack("{s:s, s:s, s:O}",
+	g_autoptr(json_t) root = json_pack("{s:s, s:s}",
 		"jsonrpc", "2.0",
-		"method", method_name,
-		"params", params?params:json_object()
+		"method", method_name
 	);
+	
+	if(params)
+	{
+		json_object_set(root,"params",params);
+	}
+	else
+	{
+		json_object_set_new(root,"params",json_object());
+	}
 	
 	if(id>=-1)
 	{
 		use_id=(id>=0)?id:(GLOBAL_RPC_ID++);
 		json_object_set_new(root, "id", json_integer(use_id));
 	}
-	
-//	if(params)
-//	{
-//		json_object_set_new(root, "params", params);
-//	}
 	
 	g_autofree char *json_str = json_dumps(root, JSON_COMPACT);
 	
@@ -106,7 +109,7 @@ int send_rpc_message(JsonRpcEndpoint *endpoint, const char *const method_name, j
 static gboolean read_stdout(GIOChannel *source, GIOCondition condition, gpointer data)
 {
 	JsonRpcEndpoint *endpoint = (JsonRpcEndpoint *)data;
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 	gchar buffer[4096];
 	gsize bytes_read=0;
 
@@ -140,11 +143,11 @@ static gboolean read_stdout(GIOChannel *source, GIOCondition condition, gpointer
 
 			// Extract JSON message
 			char *json_start = endpoint->read_buffer->str + header_len;
-			char *json_chunk = g_strndup(json_start, content_length);
+			g_autofree char *json_chunk = g_strndup(json_start, content_length);
 
 			// Parse JSON
 			json_error_t jerr;
-			json_t *json = json_loads(json_chunk, 0, &jerr);
+			g_autoptr(json_t) json = json_loads(json_chunk, 0, &jerr);
 
 			if (json)
 			{
@@ -172,22 +175,14 @@ static gboolean read_stdout(GIOChannel *source, GIOCondition condition, gpointer
 						}
 					}
 				}
-
-				json_decref(json);
 			}
 			else {
 				g_printerr("JSON parse error: %s at line %d\n", jerr.text, jerr.line);
 			}
 
-			g_free(json_chunk);
-
 			// Remove the processed message
 			g_string_erase(endpoint->read_buffer, 0, header_len + content_length);
 		}
-	}
-
-	if (error) {
-		g_error_free(error);
 	}
 
 	return TRUE;
@@ -198,7 +193,7 @@ static gboolean read_stderr(GIOChannel *source, GIOCondition condition, gpointer
 	JsonRpcEndpoint *endpoint = (JsonRpcEndpoint *)data;
 	gchar *message = NULL;
 	gsize len;
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 
 	if (condition & G_IO_HUP) {
 		g_print("Child process closed stderr.\n");
@@ -210,15 +205,11 @@ static gboolean read_stderr(GIOChannel *source, GIOCondition condition, gpointer
 		g_free(message);
 	}
 
-	if (error) {
-		g_error_free(error);
-	}
-
 	return TRUE;
 }
 
 static void spawn_child(JsonRpcEndpoint *endpoint, const gchar *program, gchar **args) {
-	GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 	gint stdin_fd, stdout_fd, stderr_fd;
 
 	if (!g_spawn_async_with_pipes(NULL, args, NULL, G_SPAWN_DO_NOT_REAP_CHILD, NULL, NULL, &endpoint->child_pid, &stdin_fd, &stdout_fd, &stderr_fd, &error)) {
@@ -281,8 +272,6 @@ const char *LOGIN_STR="{"
 "	\"workspaceFolders\": true}"
 "}";
 
-//const char *LOGIN_STR="{}";
-
 static void init_cb(JsonRpcEndpoint *endpoint, json_t *root, void *user_data)
 {
 	g_print("Initialize response received\n");
@@ -296,12 +285,10 @@ static void init_cb(JsonRpcEndpoint *endpoint, json_t *root, void *user_data)
 int initialize(JsonRpcEndpoint *endpoint,const char *const root_path, const char *const root_uri, json_t *initialization_options,
                json_t *capabilities, const char *const trace, json_t *workspace_folders)
 {
-	g_autofree char *json_str = json_dumps(capabilities, JSON_COMPACT);
-	
 //	pid_t process_id = getpid();
 	pid_t process_id = endpoint->child_pid;
 	
-	json_t *params = json_pack("{s:i, s:s, s:O, s:s, s:O}",
+	g_autoptr(json_t) params = json_pack("{s:i, s:s, s:O, s:s, s:O}",
 		"processId",process_id,
 		"rootUri",root_uri,
 		"capabilities",capabilities,
@@ -334,7 +321,7 @@ int lspjump_rpc_definition(const char *const file_path, const char *const file_c
 		g_autofree char *uri_path=NULL;
 		asprintf(&uri_path,"file://%s",file_path);
 		
-		json_t *params = json_pack("{s:{s:s, s:s, s:i, s:s}}",
+		g_autoptr(json_t) params = json_pack("{s:{s:s, s:s, s:i, s:s}}",
 			"textDocument",
 			"uri", uri_path,
 			"languageId", "c",
@@ -344,7 +331,7 @@ int lspjump_rpc_definition(const char *const file_path, const char *const file_c
 		
 		send_rpc_message(endpoint,"textDocument/didOpen",params,-2);
 		
-		json_t *params2 = json_pack("{s:{s:s},s:{s:i,s:i}}",
+		g_autoptr(json_t) params2 = json_pack("{s:{s:s},s:{s:i,s:i}}",
 			"textDocument",
 			"uri", uri_path,
 			"position",
@@ -372,7 +359,7 @@ int lspjump_rpc_reference(const char *const file_path, const char *const file_co
 		g_autofree char *uri_path=NULL;
 		asprintf(&uri_path,"file://%s",file_path);
 		
-		json_t *params = json_pack("{s:{s:s, s:s, s:i, s:s}}",
+		g_autoptr(json_t) params = json_pack("{s:{s:s, s:s, s:i, s:s}}",
 			"textDocument",
 			"uri", uri_path,
 			"languageId", "c",
@@ -382,7 +369,7 @@ int lspjump_rpc_reference(const char *const file_path, const char *const file_co
 		
 		send_rpc_message(endpoint,"textDocument/didOpen",params,-2);
 		
-		json_t *params2 = json_pack("{s:{s:s},s:{s:i,s:i}}",
+		g_autoptr(json_t) params2 = json_pack("{s:{s:s},s:{s:i,s:i}}",
 			"textDocument",
 			"uri", uri_path,
 			"position",
@@ -409,7 +396,7 @@ int lspjump_rpc_init(const char *const root_uri,const char *const lsp_bin,const 
 	guint arg_len=bin_args?g_strv_length(bin_args):0;
 	
 	gchar *args[arg_len+2];
-	args[0]=lsp_bin?lsp_bin:"/usr/bin/clangd";
+	args[0]=lsp_bin?(char*)lsp_bin:"/usr/bin/clangd";
 	int i=0;
 	while(i<arg_len)
 	{
@@ -419,10 +406,8 @@ int lspjump_rpc_init(const char *const root_uri,const char *const lsp_bin,const 
 	args[i+1]=NULL;
 	spawn_child(GLOBAL_ENDPOINT, args[0], args);
 	
-//	const char *const root_uri="file:///home/flev/dev/c/test/lsp_c";
-	
 	json_error_t error;
-	json_t *capabilities = json_loads(lsp_settings?lsp_settings:LOGIN_STR, 0, &error);
+	g_autoptr(json_t) capabilities = json_loads(lsp_settings?lsp_settings:LOGIN_STR, 0, &error);
 	
 	if (!capabilities)
 	{
@@ -430,7 +415,7 @@ int lspjump_rpc_init(const char *const root_uri,const char *const lsp_bin,const 
 		return 1;
 	}
 	
-	json_t *workspace_folders = json_pack("[{s:s, s:s}]",
+	g_autoptr(json_t) workspace_folders = json_pack("[{s:s, s:s}]",
 		"name", "gedit-lspjump-plugin",
 		"uri", root_uri
 	);

@@ -44,4 +44,8 @@ int gedit_lspjump_goto_file_line_column_and_track(GeditWindow *window, GFile *gf
 int gedit_lspjump_do_undo(GeditWindow *window);
 int gedit_lspjump_do_redo(GeditWindow *window);
 
+void track_pos_free(gpointer data);
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(json_t,json_decref)
+
 G_END_DECLS

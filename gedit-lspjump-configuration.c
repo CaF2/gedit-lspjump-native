@@ -73,10 +73,17 @@ static void parse_lspjump_file(const char *filepath)
 	g_ptr_array_add(GLOBAL_LSPJUMP_CONFIGURATIONS,cfile);
 }
 
+void exit_configuration(int exit_status, void *arg)
+{
+	g_ptr_array_free(GLOBAL_LSPJUMP_CONFIGURATIONS,TRUE);
+}
+
 int load_configuration()
 {
 	GLOBAL_LSPJUMP_CONFIGURATIONS = g_ptr_array_new_with_free_func((GDestroyNotify)lspjump_configuration_file_free);
-
+	
+	on_exit(exit_configuration,NULL);
+	
 	g_autofree char *home_config_dir = g_build_filename(g_get_home_dir(), ".config/gedit/lspjump/", NULL);
 	
 	g_autofree char *so_dir = get_so_directory();
@@ -85,8 +92,8 @@ int load_configuration()
 
 	for (size_t i = 0; i < G_N_ELEMENTS(dirs); i++)
 	{
-		GError *error = NULL;
-		GDir *dir = g_dir_open(dirs[i], 0, &error);
+		g_autoptr(GError) error = NULL;
+		g_autoptr(GDir) dir = g_dir_open(dirs[i], 0, &error);
 		if (!dir)
 		{
 			continue;
@@ -104,7 +111,6 @@ int load_configuration()
 				g_free(filepath);
 			}
 		}
-		g_dir_close(dir);
 	}
 
 	return 0;

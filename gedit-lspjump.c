@@ -499,6 +499,8 @@ static void gedit_lspjump_plugin_class_init(GeditLspJumpPluginClass *klass)
 
 static void gedit_lspjump_plugin_class_finalize(GeditLspJumpPluginClass *klass)
 {
+	g_queue_free_full(GLOBAL_BACK_STACK,track_pos_free);
+	g_queue_free_full(GLOBAL_FORWARD_STACK,track_pos_free);
 }
 
 static void gedit_app_activatable_iface_init(GeditAppActivatableInterface *iface)

@@ -65,7 +65,7 @@ static void _update_language_combo_box(GeditWindow *window, GtkWidget *lang_cb, 
 				
 				GtkTreeIter iter;
 				gtk_list_store_append(store, &iter);
-				GObject *obj1 = g_object_new(G_TYPE_OBJECT, NULL);
+				g_autoptr(GObject) obj1 = g_object_new(G_TYPE_OBJECT, NULL);
 				g_object_set_data_full(obj1, "lsp_language", lsp_language, g_free);
 				g_object_set_data_full(obj1, "lsp_bin", lsp_bin, g_free);
 				g_object_set_data_full(obj1, "lsp_bin_args", lsp_bin_args, g_free);
@@ -386,9 +386,6 @@ static void _new_language(GtkWidget *widget, GeditWindow *window)
 {
 	GtkWidget *curr_lang_combo=g_object_get_data(G_OBJECT(widget), "curr_lang");
 	GtkTreeModel *curr_lang_model=g_object_get_data(G_OBJECT(widget), "curr_lang_model");
-
-	// Placeholder for creating new language
-//	puts("New language creation: empty");
 	
 	const char *current_language=get_programming_language(window);
 	
