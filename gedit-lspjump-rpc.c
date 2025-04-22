@@ -311,6 +311,27 @@ int initialize(JsonRpcEndpoint *endpoint,const char *const root_path, const char
 	send_rpc_message(endpoint,"initialize",params,send_id);
 }
 
+int lspjump_rpc_did_open(const char *const uri_path, const char *const file_contents)
+{
+	JsonRpcEndpoint *endpoint=GLOBAL_ENDPOINT;
+	
+	if(endpoint)
+	{
+		g_autoptr(json_t) params = json_pack("{s:{s:s, s:s, s:i, s:s}}",
+			"textDocument",
+			"uri", uri_path,
+			"languageId", "c",
+			"version", 1,
+			"text", file_contents
+		);
+		
+		send_rpc_message(endpoint,"textDocument/didOpen",params,-2);
+		
+		return 0;
+	}
+	return 1;
+}
+
 int lspjump_rpc_definition(const char *const file_path, const char *const file_contents, long doc_line, long doc_offset,
                            IdActionFunction action, void *user_data)
 {
@@ -321,15 +342,7 @@ int lspjump_rpc_definition(const char *const file_path, const char *const file_c
 		g_autofree char *uri_path=NULL;
 		asprintf(&uri_path,"file://%s",file_path);
 		
-		g_autoptr(json_t) params = json_pack("{s:{s:s, s:s, s:i, s:s}}",
-			"textDocument",
-			"uri", uri_path,
-			"languageId", "c",
-			"version", 1,
-			"text", file_contents
-		);
-		
-		send_rpc_message(endpoint,"textDocument/didOpen",params,-2);
+		lspjump_rpc_did_open(uri_path,file_contents);
 		
 		g_autoptr(json_t) params2 = json_pack("{s:{s:s},s:{s:i,s:i}}",
 			"textDocument",
@@ -359,15 +372,7 @@ int lspjump_rpc_reference(const char *const file_path, const char *const file_co
 		g_autofree char *uri_path=NULL;
 		asprintf(&uri_path,"file://%s",file_path);
 		
-		g_autoptr(json_t) params = json_pack("{s:{s:s, s:s, s:i, s:s}}",
-			"textDocument",
-			"uri", uri_path,
-			"languageId", "c",
-			"version", 1,
-			"text", file_contents
-		);
-		
-		send_rpc_message(endpoint,"textDocument/didOpen",params,-2);
+		lspjump_rpc_did_open(uri_path,file_contents);
 		
 		g_autoptr(json_t) params2 = json_pack("{s:{s:s},s:{s:i,s:i}}",
 			"textDocument",
@@ -397,15 +402,7 @@ int lspjump_rpc_hover(const char *const file_path, const char *const file_conten
 		g_autofree char *uri_path=NULL;
 		asprintf(&uri_path,"file://%s",file_path);
 		
-		g_autoptr(json_t) params = json_pack("{s:{s:s, s:s, s:i, s:s}}",
-			"textDocument",
-			"uri", uri_path,
-			"languageId", "c",
-			"version", 1,
-			"text", file_contents
-		);
-		
-		send_rpc_message(endpoint,"textDocument/didOpen",params,-2);
+		lspjump_rpc_did_open(uri_path,file_contents);
 		
 		g_autoptr(json_t) params2 = json_pack("{s:{s:s},s:{s:i,s:i}}",
 			"textDocument",
