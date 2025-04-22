@@ -119,6 +119,123 @@ static gboolean on_key_press_event(GtkWidget *widget, GdkEventKey *event, gpoint
 	return FALSE;
 }
 
+/**
+{
+	"id":2367,"jsonrpc":"2.0","result":
+	{
+		"contents":
+		{
+			"kind":"markdown",
+			"value":"### macro `g_return_if_fail`  \nprovided by `\"glib.h\"`  \n\n---\n```cpp\n#define g_return_if_fail(expr)                                                 \\\n  G_STMT_START {                                                               \\\n    if (G_LIKELY(expr)) {                                                      \\\n    } else {                                                                   \\\n      g_return_if_fail_warning(G_LOG_DOMAIN, G_STRFUNC, #expr);                \\\n      return;                                                                  \\\n    }                                                                          \\\n  }                                                                            \\\n  G_STMT_END\n\n// Expands to\ndo {\n  if ((doc != ((void *)0))) {\n  } else {\n    g_return_if_fail_warning(((gchar *)0), ((const char *)(__func__)),\n                             \"doc != NULL\");\n    return;\n  }\n} while (0)\n```"
+		},
+		"range":
+		{
+			"end":
+			{
+				"character":20,
+				"line":54
+			},
+			"start":
+			{
+				"character":4,
+				"line":54
+			}
+		}
+	}
+}
+
+*/
+static void lspjump_rpc_hover_cb(JsonRpcEndpoint *endpoint, json_t *root, void *user_data)
+{
+//	GeditLspJumpPlugin *plugin=user_data;
+	GtkWidget *widget=user_data;
+	
+	g_autofree char *json_str = json_dumps(root, JSON_COMPACT);
+	
+	fprintf(stdout,"%s:%d HOVER: [%s]\n",__FILE__,__LINE__,json_str);
+	
+	json_t *result = json_object_get(root, "result");
+	if (!json_is_object(result) || json_object_size(result) == 0)
+	{
+		fprintf(stderr, "Invalid or empty result object\n");
+		return;
+	}
+
+	json_t *contents = json_object_get(result, "contents");
+	json_t *value_obj = json_object_get(contents, "value");
+	const char *tooltip_value = json_string_value(value_obj);
+	
+	json_t *kind_obj = json_object_get(contents, "kind");
+	const char *kind_value = json_string_value(kind_obj);
+	
+	g_object_set_data(G_OBJECT(widget), "do-ttip",(void*)10);
+	g_object_set_data_full(G_OBJECT(widget), "do-ttip-txt",g_strdup(tooltip_value),g_free);
+	g_object_set_data_full(G_OBJECT(widget), "do-ttip-kind",g_strdup(kind_value),g_free);
+	gtk_widget_trigger_tooltip_query(widget);
+}
+
+gboolean on_tooltip(GtkWidget *widget,int x,int y,gboolean keyboard_mode,GtkTooltip *tooltip,gpointer user_data)
+{
+	if(keyboard_mode==FALSE)
+	{
+		intptr_t do_ttip_count=(intptr_t)g_object_get_data(G_OBJECT(widget), "do-ttip");
+		if(do_ttip_count>0)
+		{
+			const char *const do_ttip_txt=g_object_get_data(G_OBJECT(widget), "do-ttip-txt");
+			const char *const do_ttip_kind=g_object_get_data(G_OBJECT(widget), "do-ttip-txt");
+			
+			if(g_strcmp0(do_ttip_kind,"markdown")==0 || g_strcmp0(do_ttip_kind,"markup")==0)
+			{
+				gtk_tooltip_set_markup(tooltip,do_ttip_txt);
+			}
+			else
+			{
+				gtk_tooltip_set_text(tooltip,do_ttip_txt);
+			}
+			
+			g_object_set_data(G_OBJECT(widget), "do-ttip",(void*)(do_ttip_count-1));
+//			fprintf(stdout,"%s:%d ======================= [%s]\n",__FILE__,__LINE__,do_ttip_txt);
+			return TRUE;
+		}
+	
+		GeditLspJumpPlugin *plugin=user_data;
+		
+		GeditWindow *const window=plugin->priv->window;
+
+		GFile *gfile=lspjump_get_active_file_from_window(window);
+		
+		g_autofree gchar *file_path = g_file_get_path(gfile);
+		
+		g_autofree gchar *text=get_full_text_from_active_document(window);
+		
+		GeditTab *tab = gedit_window_get_active_tab(window);
+		if (!tab)
+		{
+			g_print("No active tab.\n");
+			return FALSE;
+		}
+
+		GeditDocument *doc = gedit_tab_get_document(tab);
+
+		gint buf_x,buf_y;
+		gtk_text_view_window_to_buffer_coords(GTK_TEXT_VIEW(widget),GTK_TEXT_WINDOW_WIDGET,x,y,&buf_x,&buf_y);
+
+		GtkTextIter iter;
+		
+		gtk_text_view_get_iter_at_location(GTK_TEXT_VIEW(widget),&iter,buf_x,buf_y);
+		
+		gint line = gtk_text_iter_get_line(&iter); // Zero-based line number
+		gint offset = gtk_text_iter_get_offset(&iter); // Offset from start of buffer
+		gint line_offset = gtk_text_iter_get_line_offset(&iter); // Offset within the line
+		
+		lspjump_rpc_hover(file_path,text,line,line_offset,lspjump_rpc_hover_cb,widget);
+		
+		return FALSE;
+	}
+	
+	return FALSE;
+}
+
 static void lspjump_rpc_definition_cb(JsonRpcEndpoint *endpoint, json_t *root, void *user_data)
 {
 	GeditLspJumpPlugin *plugin=user_data;
@@ -127,7 +244,6 @@ static void lspjump_rpc_definition_cb(JsonRpcEndpoint *endpoint, json_t *root, v
 	if (!json_is_array(result) || json_array_size(result) == 0)
 	{
 		fprintf(stderr, "Invalid or empty result array\n");
-		json_decref(root);
 		return;
 	}
 
@@ -366,6 +482,7 @@ static void on_tab_changed(GeditWindow *window, gpointer user_data)
 			g_object_set_data(G_OBJECT(view), "ll", "y");
 			// Ensure each new tab gets the key-press-event handler
 			g_signal_connect(view, "key-press-event", G_CALLBACK(on_key_press_event), user_data);
+			g_signal_connect(view, "query-tooltip", G_CALLBACK(on_tooltip), user_data);
 		}
 	}
 }

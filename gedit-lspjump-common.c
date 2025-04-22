@@ -165,7 +165,6 @@ int gedit_lspjump_goto_file_line_column_and_track(GeditWindow *window, GFile *gf
 	GtkTextIter iter;
 	gtk_text_buffer_get_iter_at_mark(buffer, &iter, gtk_text_buffer_get_insert(buffer));
 	
-	
 	TrackPos *new_pos=calloc(1,sizeof(TrackPos));
 	new_pos->file=g_file_dup(prev_file);
 	new_pos->line=gtk_text_iter_get_line(&iter);

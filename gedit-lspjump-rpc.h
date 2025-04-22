@@ -60,4 +60,7 @@ int lspjump_rpc_definition(const char *const file_path, const char *const file_c
 int lspjump_rpc_reference(const char *const file_path, const char *const file_contents, long doc_line, long doc_offset,
                            IdActionFunction action, void *user_data);
 
+int lspjump_rpc_hover(const char *const file_path, const char *const file_contents, long doc_line, long doc_offset,
+                      IdActionFunction action, void *user_data);
+
 G_END_DECLS

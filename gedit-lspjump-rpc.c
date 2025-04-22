@@ -387,6 +387,44 @@ int lspjump_rpc_reference(const char *const file_path, const char *const file_co
 	return 1;
 }
 
+int lspjump_rpc_hover(const char *const file_path, const char *const file_contents, long doc_line, long doc_offset,
+                      IdActionFunction action, void *user_data)
+{
+	JsonRpcEndpoint *endpoint=GLOBAL_ENDPOINT;
+	
+	if(endpoint)
+	{
+		g_autofree char *uri_path=NULL;
+		asprintf(&uri_path,"file://%s",file_path);
+		
+		g_autoptr(json_t) params = json_pack("{s:{s:s, s:s, s:i, s:s}}",
+			"textDocument",
+			"uri", uri_path,
+			"languageId", "c",
+			"version", 1,
+			"text", file_contents
+		);
+		
+		send_rpc_message(endpoint,"textDocument/didOpen",params,-2);
+		
+		g_autoptr(json_t) params2 = json_pack("{s:{s:s},s:{s:i,s:i}}",
+			"textDocument",
+			"uri", uri_path,
+			"position",
+			"line",doc_line,
+			"character",doc_offset
+		);
+
+		int send_id=store_rpc_action(endpoint,action,user_data);
+
+		send_rpc_message(endpoint,"textDocument/hover",params2,-1);
+
+		return 0;
+	}
+	
+	return 1;
+}
+
 int lspjump_rpc_init(const char *const root_uri,const char *const lsp_bin,const char *const lsp_bin_args,const char *const lsp_settings)
 {
 	GLOBAL_ENDPOINT=calloc(1,sizeof(JsonRpcEndpoint));
